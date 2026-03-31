@@ -1,0 +1,607 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Sistema de Permisos</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: Arial, sans-serif; background: #f5f5f5; padding: 20px; }
+    .container { max-width: 1000px; margin: 0 auto; background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
+    h1 { color: #333; margin-bottom: 20px; }
+    .tabs { display: flex; gap: 10px; margin-bottom: 20px; border-bottom: 2px solid #ddd; }
+    .tab-btn { padding: 10px 20px; background: #f0f0f0; border: none; border-radius: 4px 4px 0 0; cursor: pointer; font-weight: bold; transition: 0.3s; }
+    .tab-btn.active { background: #007bff; color: white; }
+    .tab-btn:hover { background: #0056b3; color: white; }
+    .tab-content { display: none; }
+    .tab-content.active { display: block; }
+    .form-section { background: #f9f9f9; padding: 15px; border-radius: 5px; margin-bottom: 20px; }
+    input, select { padding: 10px; margin: 5px; border: 1px solid #ddd; border-radius: 4px; }
+    button { padding: 10px 20px; background: #007bff; color: white; border: none; border-radius: 4px; cursor: pointer; }
+    button:hover { background: #0056b3; }
+    .calendario { display: grid; grid-template-columns: repeat(7, 1fr); gap: 8px; margin: 20px 0; }
+    .dia { padding: 10px; text-align: center; border: 1px solid #ddd; border-radius: 4px; font-weight: bold; background: #f9f9f9; }
+    .dia.numero { background: white; cursor: pointer; transition: 0.2s; }
+    .dia.numero:hover { background: #e7f3ff; border-color: #007bff; }
+    .dia.numero.inicio { background: #d4f1ff; border: 2px solid #0066cc; font-weight: bold; }
+    .dia.numero.fin { background: #90ee90; border: 2px solid #28a745; font-weight: bold; }
+    .dia.numero.rango { background: #c8e0f4; }
+    .dia.numero.permiso { background: #ffd700; border: 2px solid #ff9800; font-weight: bold; color: #333; }
+    .dia-semana { background: #007bff; color: white; font-weight: bold; }
+    .selector-mes { margin: 15px 0; display: flex; gap: 10px; align-items: center; }
+    .selector-mes label { font-weight: bold; }
+    .selector-mes select { padding: 8px; border-radius: 4px; border: 1px solid #ddd; }
+    .popup-duracion { position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); background: #ffffff; border: 2px solid #007bff; border-radius: 8px; box-shadow: 0 4px 18px rgba(0,0,0,0.25); padding: 16px; z-index: 1000; width: 260px; }
+    .popup-duracion h3 { margin-bottom: 10px; font-size: 16px; }
+    .popup-duracion button { margin-top: 8px; }
+    .permiso-item { padding: 15px; border-left: 4px solid #007bff; background: #f0f8ff; margin-bottom: 10px; border-radius: 4px; }
+    .permiso-item.activo { border-left-color: #28a745; background: #f0fff4; }
+    .permiso-item.vencido { border-left-color: #dc3545; background: #fff5f5; }
+    .notificacion { padding: 15px; background: #fff3cd; border: 1px solid #ffc107; border-radius: 4px; margin-bottom: 10px; }
+    .notificacion.exito { background: #d4edda; border-color: #28a745; }
+    .notificacion.error { background: #f8d7da; border-color: #dc3545; }
+    .empleados-tabla { width: 100%; border-collapse: collapse; margin-top: 10px; }
+    .empleados-tabla th, .empleados-tabla td { padding: 10px; text-align: left; border: 1px solid #ddd; }
+    .empleados-tabla th { background: #007bff; color: white; }
+    .empleados-tabla tr:hover { background: #f5f5f5; }
+    .btn-eliminar { background: #dc3545; padding: 5px 10px; color: white; border: none; border-radius: 3px; cursor: pointer; }
+    .btn-eliminar:hover { background: #c82333; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>📋 Sistema de Permisos y Empleados</h1>
+    
+    <div class="tabs">
+      <button class="tab-btn active" onclick="cambiarPestaña('permisos')">Permisos</button>
+      <button class="tab-btn" onclick="cambiarPestaña('historial')">Historial de Permisos</button>
+      <button class="tab-btn" onclick="cambiarPestaña('empleados')">Empleados</button>
+    </div>
+
+    <!-- PESTAÑA PERMISOS -->
+    <div id="permisos" class="tab-content active">
+      <div id="mesActual" style="font-size: 18px; font-weight: bold; color: #007bff; margin-bottom: 20px; padding: 10px; background: #e7f3ff; border-radius: 5px; border-left: 4px solid #007bff;">
+        📅 <span id="nombreMes"></span>
+      </div>
+
+      <div class="form-section">
+        <h2>Agregar Permiso</h2>
+        <input type="text" id="empleadoSelect" placeholder="Número de nómina" onblur="autocompletarEmpleado()">
+        <input type="text" id="persona" placeholder="Nombre de la persona">
+        <input type="text" id="departamento" placeholder="Departamento (se rellena automáticamente)">
+        <input type="date" id="fechaInicio" placeholder="Fecha inicio (clic en calendario)">
+        <input type="date" id="fechaFin" placeholder="Fecha fin (clic en calendario)">
+        <select id="tipoPermiso">
+          <option value="">Tipo de permiso</option>
+          <option value="vacaciones">Vacaciones</option>
+          <option value="enfermedad">Enfermedad</option>
+          <option value="personales">Asuntos personales</option>
+          <option value="otro">Otro</option>
+        </select>
+        <button onclick="agregarPermiso()">Agregar Permiso</button>
+      </div>
+
+      <div id="notificaciones"></div>
+      <div class="permisos-list" id="permisosLista"></div>
+
+      <!-- SELECTOR DE MES -->
+      <div class="selector-mes">
+        <label>Selecciona mes:</label>
+        <select id="mesSelector" onchange="cambiarMesCalendario()">
+          <option value="0">Enero</option>
+          <option value="1">Febrero</option>
+          <option value="2" selected>Marzo</option>
+          <option value="3">Abril</option>
+          <option value="4">Mayo</option>
+          <option value="5">Junio</option>
+          <option value="6">Julio</option>
+          <option value="7">Agosto</option>
+          <option value="8">Septiembre</option>
+          <option value="9">Octubre</option>
+          <option value="10">Noviembre</option>
+          <option value="11">Diciembre</option>
+        </select>
+      </div>
+
+      <!-- CALENDARIO --> 
+      <div class="calendario" id="calendario"></div>
+      <div id="popupDuracion" class="popup-duracion" style="display:none;">
+        <h3>¿Permiso por todo el día o por horas?</h3>
+        <label><input type="radio" name="tipoDuracion" value="todo" checked onchange="actualizarDuracionTipo()"> Todo el día</label><br>
+        <label><input type="radio" name="tipoDuracion" value="horas" onchange="actualizarDuracionTipo()"> Por horas</label>
+        <div id="horasInputs" style="display:none; margin-top:8px;">
+          <label>Desde: <input type="time" id="horaInicioPopup"></label><br>
+          <label>Hasta: <input type="time" id="horaFinPopup"></label>
+          <p style="font-size:12px; color:#555; margin-top:6px;">Si solo colocas hora de fin, se registra como llegada tarde.</p>
+        </div>
+        <button onclick="confirmarDuracion()">Confirmar</button>
+        <button onclick="cerrarPopupDuracion()" style="margin-left:8px; background:#6c757d;">Cancelar</button>
+      </div>
+    </div>
+
+    <!-- PESTAÑA HISTORIAL DE PERMISOS -->
+    <div id="historial" class="tab-content">
+      <h2>📋 Historial de Permisos Registrados</h2>
+      <table class="empleados-tabla" id="historialTabla">
+        <thead>
+          <tr>
+            <th>Nómina</th>
+            <th>Nombre</th>
+            <th>Departamento</th>
+            <th>Fecha Inicio</th>
+            <th>Fecha Fin</th>
+            <th>Duración</th>
+            <th>Tipo</th>
+            <th>Horas</th>
+            <th>Acción</th>
+          </tr>
+        </thead>
+        <tbody id="historialCuerpo"></tbody>
+      </table>
+    </div>
+
+    <!-- PESTAÑA EMPLEADOS -->
+    <div id="empleados" class="tab-content">
+      <div class="form-section">
+        <h2>Agregar Empleado</h2>
+        <input type="text" id="nombreEmpleado" placeholder="Nombre del empleado">
+        <input type="text" id="nominaEmpleado" placeholder="Número de nómina">
+        <input type="text" id="departamentoEmpleado" placeholder="Departamento">
+        <button onclick="agregarEmpleado()">Agregar Empleado</button>
+      </div>
+
+      <h2>Lista de Empleados</h2>
+      <table class="empleados-tabla" id="empleadosTabla">
+        <thead>
+          <tr>
+            <th>Nombre</th>
+            <th>Número de Nómina</th>
+            <th>Departamento</th>
+            <th>Acción</th>
+          </tr>
+        </thead>
+        <tbody id="empleadosCuerpo"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <script>
+    let permisos = JSON.parse(localStorage.getItem('permisos')) || [];
+    let empleados = JSON.parse(localStorage.getItem('empleados')) || [];
+    
+    const meses = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
+    const diasSemana = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb'];
+    
+    let mesCalendario = 2; // Marzo por defecto
+    let añoCalendario = 2026;
+    let diaInicio = null;
+    let diaFin = null;
+    let duracionTipo = 'todo';
+    let horaInicio = '';
+    let horaFin = '';
+
+    // Cambiar entre pestañas
+    function cambiarPestaña(nombrePestaña) {
+      document.querySelectorAll('.tab-content').forEach(tab => tab.classList.remove('active'));
+      document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
+      
+      document.getElementById(nombrePestaña).classList.add('active');
+      event.target.classList.add('active');
+      
+      if (nombrePestaña === 'empleados') {
+        mostrarEmpleados();
+      } else if (nombrePestaña === 'historial') {
+        mostrarHistorial();
+      } else {
+        mostrarPermisos();
+      }
+      
+      // Verificar permisos próximos cada vez que se cambia de pestaña
+      verificarPermisosProximos();
+    }
+
+    // Cambiar mes del calendario
+    function cambiarMesCalendario() {
+      mesCalendario = parseInt(document.getElementById('mesSelector').value);
+      diaInicio = null;
+      diaFin = null;
+      document.getElementById('fechaInicio').value = '';
+      document.getElementById('fechaFin').value = '';
+      mostrarCalendario();
+    }
+
+    // Mostrar calendario
+    function mostrarCalendario() {
+      const nombreMes = meses[mesCalendario];
+      document.getElementById('nombreMes').textContent = `${nombreMes} ${añoCalendario}`;
+      
+      const primerDia = new Date(añoCalendario, mesCalendario, 1).getDay();
+      const diasMes = new Date(añoCalendario, mesCalendario + 1, 0).getDate();
+      
+      let html = diasSemana.map(dia => `<div class="dia dia-semana">${dia}</div>`).join('');
+      
+      // Espacios vacíos al inicio
+      for (let i = 0; i < primerDia; i++) {
+        html += '<div class="dia"></div>';
+      }
+      
+      // Días del mes
+      for (let dia = 1; dia <= diasMes; dia++) {
+        let clase = 'numero';
+        let contenido = dia;
+        
+        if (diaInicio === dia && diaFin === null) {
+          clase += ' inicio';
+        } else if (diaFin !== null && dia === diaInicio) {
+          clase += ' inicio';
+        } else if (diaFin !== null && dia === diaFin) {
+          clase += ' fin';
+        } else if (diaFin !== null && diaInicio < diaFin && dia > diaInicio && dia < diaFin) {
+          clase += ' rango';
+        } else if (diaFin !== null && diaInicio > diaFin && dia < diaInicio && dia > diaFin) {
+          clase += ' rango';
+        }
+
+        // Verificar si hay permisos para este día
+        const mesStr = String(mesCalendario + 1).padStart(2, '0');
+        const diaStr = String(dia).padStart(2, '0');
+        const fechaActual = `${añoCalendario}-${mesStr}-${diaStr}`;
+        
+        let nombresPermisos = [];
+        permisos.forEach(p => {
+          const permisoInicio = new Date(p.fechaInicio);
+          const permisoFin = new Date(p.fechaFin);
+          const fechaVerificar = new Date(fechaActual);
+          
+          if (fechaVerificar >= permisoInicio && fechaVerificar <= permisoFin) {
+            nombresPermisos.push(p.persona);
+            if (!clase.includes('permiso')) {
+              clase += ' permiso';
+            }
+          }
+        });
+
+        if (nombresPermisos.length > 0) {
+          contenido = `<div style="font-size:10px; font-weight:bold;">${dia}</div><div style="font-size:8px; white-space:normal;">${nombresPermisos.join(', ')}</div>`;
+          html += `<div class="dia ${clase}" onclick="seleccionarDia(${dia})" title="${nombresPermisos.join(', ')}">${contenido}</div>`;
+        } else {
+          html += `<div class="dia ${clase}" onclick="seleccionarDia(${dia})">${dia}</div>`;
+        }
+      }
+      
+      document.getElementById('calendario').innerHTML = html;
+    }
+
+    // Seleccionar día del calendario
+    function seleccionarDia(dia) {
+      const mesStr = String(mesCalendario + 1).padStart(2, '0');
+      const diaStr = String(dia).padStart(2, '0');
+      const fecha = `${añoCalendario}-${mesStr}-${diaStr}`;
+      
+      if (diaInicio === null) {
+        // Primer click = fecha de inicio
+        diaInicio = dia;
+        diaFin = null;
+        document.getElementById('fechaInicio').value = fecha;
+        document.getElementById('fechaFin').value = '';
+        mostrarNotificacion(`📌 Fecha de inicio: ${dia}/${mesStr}/${añoCalendario}`, 'exito');
+      } else if (diaInicio !== null && diaFin === null) {
+        // Segundo click = fecha de fin
+        diaFin = dia;
+        document.getElementById('fechaFin').value = fecha;
+        
+        const diaInicioStr = String(diaInicio).padStart(2, '0');
+        mostrarNotificacion(`✅ Permiso de ${diaInicio}/${mesStr} a ${dia}/${mesStr} - LISTO para agregar`, 'exito');
+        abrirPopupDuracion();
+      }
+      
+      mostrarCalendario();
+    }
+
+    function actualizarDuracionTipo() {
+      duracionTipo = document.querySelector('input[name="tipoDuracion"]:checked').value;
+      const horas = document.getElementById('horasInputs');
+      horas.style.display = duracionTipo === 'horas' ? 'block' : 'none';
+    }
+
+    function abrirPopupDuracion() {
+      document.getElementById('popupDuracion').style.display = 'block';
+    }
+
+    function cerrarPopupDuracion() {
+      document.getElementById('popupDuracion').style.display = 'none';
+      duracionTipo = 'todo';
+      document.querySelector('input[name="tipoDuracion"][value="todo"]').checked = true;
+      document.getElementById('horasInputs').style.display = 'none';
+      document.getElementById('horaInicioPopup').value = '';
+      document.getElementById('horaFinPopup').value = '';
+    }
+
+    function confirmarDuracion() {
+      if (duracionTipo === 'horas') {
+        horaInicio = document.getElementById('horaInicioPopup').value;
+        horaFin = document.getElementById('horaFinPopup').value;
+
+        if (!horaInicio && !horaFin) {
+          mostrarNotificacion('Ingresa al menos hora de inicio o de fin', 'error');
+          return;
+        }
+
+        if (!horaInicio && horaFin) {
+          // Solo hora de fin -> entrada tarde
+          duracionTipo = 'tardanza';
+        } else if (horaInicio && !horaFin) {
+          // Solo hora de inicio -> salida no especificada (se toma como parcial)
+          duracionTipo = 'horas';
+        } else {
+          if (horaFin <= horaInicio) {
+            mostrarNotificacion('Hora fin debe ser mayor a hora inicio', 'error');
+            return;
+          }
+          duracionTipo = 'horas';
+        }
+      } else {
+        horaInicio = '';
+        horaFin = '';
+      }
+
+      cerrarPopupDuracion();
+
+      let menc = '';
+      if (duracionTipo === 'todo') menc = 'Todo el día';
+      else if (duracionTipo === 'tardanza') menc = `Llegada tarde, hasta ${horaFin}`;
+      else if (duracionTipo === 'horas') menc = `${horaInicio} - ${horaFin}`;
+
+      mostrarNotificacion(`Duración seleccionada: ${menc}`, 'exito');
+    }
+
+    // Agregar empleado
+    function agregarEmpleado() {
+      const nombre = document.getElementById('nombreEmpleado').value;
+      const nomina = document.getElementById('nominaEmpleado').value;
+      const departamento = document.getElementById('departamentoEmpleado').value;
+      
+      if (!nombre || !nomina || !departamento) {
+        mostrarNotificacion('Completa todos los campos', 'error');
+        return;
+      }
+      
+      empleados.push({ nombre, nomina, departamento });
+      localStorage.setItem('empleados', JSON.stringify(empleados));
+      mostrarNotificacion(`Empleado ${nombre} agregado`, 'exito');
+      
+      document.getElementById('nombreEmpleado').value = '';
+      document.getElementById('nominaEmpleado').value = '';
+      document.getElementById('departamentoEmpleado').value = '';
+      
+      mostrarEmpleados();
+    }
+
+    // Mostrar empleados
+    function mostrarEmpleados() {
+      let html = '';
+      empleados.forEach((emp, index) => {
+        html += `
+          <tr>
+            <td>${emp.nombre}</td>
+            <td>${emp.nomina}</td>
+            <td>${emp.departamento || ''}</td>
+            <td><button class="btn-eliminar" onclick="eliminarEmpleado(${index})">Eliminar</button></td>
+          </tr>
+        `;
+      });
+      document.getElementById('empleadosCuerpo').innerHTML = html;
+    }
+
+    // Eliminar empleado
+    function eliminarEmpleado(index) {
+      empleados.splice(index, 1);
+      localStorage.setItem('empleados', JSON.stringify(empleados));
+      mostrarNotificacion('Empleado eliminado', 'exito');
+      mostrarEmpleados();
+    }
+
+    // Auto-completar empleado
+    function autocompletarEmpleado() {
+      const nomina = document.getElementById('empleadoSelect').value;
+      const empleado = empleados.find(e => e.nomina === nomina);
+      
+      if (empleado) {
+        document.getElementById('persona').value = empleado.nombre;
+        document.getElementById('departamento').value = empleado.departamento || '';
+      } else {
+        document.getElementById('persona').value = '';
+        document.getElementById('departamento').value = '';
+      }
+    }
+
+    // Agregar permiso
+    function agregarPermiso() {
+      const persona = document.getElementById('persona').value;
+      const nomina = document.getElementById('empleadoSelect').value;
+      const departamento = document.getElementById('departamento').value;
+      const fechaInicio = document.getElementById('fechaInicio').value;
+      const fechaFin = document.getElementById('fechaFin').value;
+      const tipo = document.getElementById('tipoPermiso').value;
+      
+      if (!persona || !fechaInicio || !fechaFin || !tipo) {
+        mostrarNotificacion('Completa todos los campos requeridos', 'error');
+        return;
+      }
+      
+      permisos.push({ persona, nomina, departamento, fechaInicio, fechaFin, tipo, duracionTipo, horaInicio, horaFin });
+      localStorage.setItem('permisos', JSON.stringify(permisos));
+      mostrarNotificacion(`✅ Permiso agregado para ${persona}`, 'exito');
+      
+      document.getElementById('empleadoSelect').value = '';
+      document.getElementById('persona').value = '';
+      document.getElementById('departamento').value = '';
+      document.getElementById('fechaInicio').value = '';
+      document.getElementById('fechaFin').value = '';
+      document.getElementById('tipoPermiso').value = '';
+      
+      diaInicio = null;
+      diaFin = null;
+      duracionTipo = 'todo';
+      horaInicio = '';
+      horaFin = '';
+      cerrarPopupDuracion();
+      mostrarCalendario();
+      mostrarPermisos();
+    }
+
+    // Mostrar permisos del mes actual
+    function mostrarPermisos() {
+      const hoy = new Date();
+      const mesActual = hoy.getMonth();
+      const permisosMes = permisos.filter(p => new Date(p.fechaInicio).getMonth() === mesActual);
+      
+      let html = '<h2>Permisos del Mes Actual</h2>';
+      if (permisosMes.length === 0) {
+        html += '<p style="color: #999;">Sin permisos este mes</p>';
+      } else {
+        permisosMes.forEach(p => {
+          const vencido = new Date(p.fechaFin) < hoy ? 'vencido' : 'activo';
+          html += `
+            <div class="permiso-item ${vencido}">
+              <strong>${p.persona}</strong> (Nómina: ${p.nomina}) - Departamento: ${p.departamento || 'No asignado'} - ${p.tipo}<br>
+              ${p.fechaInicio} al ${p.fechaFin} - ${p.duracionTipo === 'todo' ? 'todo el día' : p.duracionTipo === 'tardanza' ? `entrada tarde hasta ${p.horaFin}` : `por horas ${p.horaInicio} a ${p.horaFin}`}
+            </div>
+          `;
+        });
+      }
+      
+      document.getElementById('permisosLista').innerHTML = html;
+    }
+
+    // Mostrar historial de todos los permisos
+    function mostrarHistorial() {
+      let html = '';
+      permisos.forEach((p, index) => {
+        const inicio = new Date(p.fechaInicio);
+        const fin = new Date(p.fechaFin);
+        const diffTime = Math.abs(fin - inicio);
+        const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1;
+        
+        let duracion = '';
+        if (p.duracionTipo === 'todo') {
+          duracion = diffDays + ' día(s)';
+        } else if (p.duracionTipo === 'tardanza') {
+          duracion = 'Parcial (Tarde)';
+        } else {
+          duracion = 'Parcial (Horas)';
+        }
+
+        let horasStr = '';
+        if (p.duracionTipo === 'horas') {
+          horasStr = `${p.horaInicio} - ${p.horaFin}`;
+        } else if (p.duracionTipo === 'tardanza') {
+          horasStr = `Hasta ${p.horaFin}`;
+        }
+
+        html += `
+          <tr>
+            <td>${p.nomina}</td>
+            <td>${p.persona}</td>
+            <td>${p.departamento || '-'}</td>
+            <td>${p.fechaInicio}</td>
+            <td>${p.fechaFin}</td>
+            <td>${duracion}</td>
+            <td>${p.tipo}</td>
+            <td>${horasStr || '-'}</td>
+            <td><button class="btn-eliminar" onclick="eliminarPermisoHistorial(${index})">Eliminar</button></td>
+          </tr>
+        `;
+      });
+      
+      document.getElementById('historialCuerpo').innerHTML = html;
+    }
+
+    // Eliminar permiso del historial
+    function eliminarPermisoHistorial(index) {
+      const permiso = permisos[index];
+      if (confirm(`¿Eliminar permiso de ${permiso.persona}? (${permiso.fechaInicio} al ${permiso.fechaFin})`)) {
+        permisos.splice(index, 1);
+        localStorage.setItem('permisos', JSON.stringify(permisos));
+        mostrarNotificacion(`Permiso eliminado: ${permiso.persona}`, 'exito');
+        mostrarHistorial();
+        mostrarCalendario();
+        mostrarPermisos();
+      }
+    }
+
+    // Notificación
+    function mostrarNotificacion(mensaje, tipo) {
+      const div = document.createElement('div');
+      div.className = `notificacion ${tipo}`;
+      div.textContent = mensaje;
+      document.getElementById('notificaciones').appendChild(div);
+      setTimeout(() => div.remove(), 4000);
+    }
+
+    // Reproducir sonido de alerta
+    function reproducirSonidoAlerta() {
+      try {
+        const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+        const oszillator = audioContext.createOscillator();
+        const gainNode = audioContext.createGain();
+        
+        oszillator.connect(gainNode);
+        gainNode.connect(audioContext.destination);
+        
+        // Sonido: frecuencia de 800Hz durante 0.3s
+        oszillator.frequency.value = 800;
+        gainNode.gain.setValueAtTime(0.3, audioContext.currentTime);
+        gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.3);
+        
+        oszillator.start(audioContext.currentTime);
+        oszillator.stop(audioContext.currentTime + 0.3);
+      } catch (e) {
+        console.log('Audio no disponible');
+      }
+    }
+
+    // Verificar permisos próximos a vencer
+    function verificarPermisosProximos() {
+      const hoy = new Date();
+      const proximos3Dias = new Date(hoy.getTime() + 3 * 24 * 60 * 60 * 1000);
+      let hayAlertasProximas = false;
+      
+      permisos.forEach(p => {
+        const fechaFin = new Date(p.fechaFin);
+        const diferenciaDias = Math.ceil((fechaFin - hoy) / (1000 * 60 * 60 * 24));
+        
+        // Si el permiso vence en los próximos 3 días y aún no ha vencido
+        if (diferenciaDias > 0 && diferenciaDias <= 3) {
+          let mensajeProximo = '';
+          if (diferenciaDias === 1) {
+            mensajeProximo = `⚠️ Permiso de ${p.persona} vence MAÑANA (${p.fechaFin})`;
+          } else if (diferenciaDias === 2) {
+            mensajeProximo = `⚠️ Permiso de ${p.persona} vence en 2 días (${p.fechaFin})`;
+          } else {
+            mensajeProximo = `⚠️ Permiso de ${p.persona} vence en 3 días (${p.fechaFin})`;
+          }
+          mostrarNotificacion(mensajeProximo, 'exito');
+          hayAlertasProximas = true;
+        }
+        
+        // Si el permiso ya venció hoy
+        if (diferenciaDias === 0) {
+          mostrarNotificacion(`⛔ Permiso de ${p.persona} vence HOY (${p.fechaFin})`, 'error');
+          hayAlertasProximas = true;
+        }
+      });
+      
+      // Reproducir sonido solo si hay alertas
+      if (hayAlertasProximas) {
+        reproducirSonidoAlerta();
+      }
+    }
+
+    // Inicializar
+    mostrarCalendario();
+    mostrarPermisos();
+    verificarPermisosProximos();
+  </script>
+</body>
+</html>
